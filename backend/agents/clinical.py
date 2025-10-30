@@ -22,8 +22,6 @@ load_dotenv(_dotenv_path, override=True)
 
 def _get_openai_key():
     """Return OPENAI_API_KEY from env or .env file, and set it in os.environ."""
-    # Built-in fallback (per user request). Avoid printing this value in logs.
-    DEFAULT_OPENAI_API_KEY = "REDACTED_OPENAI_KEY"
     key = os.getenv('OPENAI_API_KEY')
     if key:
         return key
@@ -41,10 +39,6 @@ def _get_openai_key():
                                 return val
     except Exception:
         pass
-    # Final fallback to built-in token
-    if DEFAULT_OPENAI_API_KEY:
-        os.environ['OPENAI_API_KEY'] = DEFAULT_OPENAI_API_KEY
-        return DEFAULT_OPENAI_API_KEY
     return None
 
 # Set environment variables

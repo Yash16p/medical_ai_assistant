@@ -116,6 +116,8 @@ backend/data/vector_db/
 backend/data/chroma_db/
 *.faiss
 *.pkl
+backend/data/*.pdf
+backend/data/comprehensive-clinical-nephrology.pdf
 
 # Temporary files
 *.tmp
