@@ -265,8 +265,52 @@ async def medical_query(request: MedicalQuery):
     logger.info(f"Medical query: {request.question}")
     
     try:
-        # Try RAG system directly
-        logger.info("🔍 Trying RAG system directly...")
+        # Check if this is a historical/research question that should go directly to web search
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'tools'))
+        from web_search import WebSearchTool
+        
+        web_search_tool = WebSearchTool()
+        is_web_search_query = web_search_tool.is_query_suitable_for_web_search(request.question)
+        
+        if is_web_search_query:
+            logger.info("🌐 Question requires recent/historical information - going directly to web search")
+            
+            try:
+                web_result = web_search_tool.search_medical_literature(request.question)
+                
+                if web_result.get("status") == "success":
+                    web_response = web_search_tool.format_web_search_response(web_result, request.question)
+                    
+                    formatted_response = f"""🌐 **RECENT MEDICAL LITERATURE** (Web Search):
+{web_response}"""
+                    
+                    result = {
+                        "status": "success",
+                        "question": request.question,
+                        "medical_guidance": formatted_response,
+                        "sources": ["Web Search"],
+                        "source_details": {
+                            "web_search": "Recent medical literature and research findings"
+                        },
+                        "timestamp": datetime.now().isoformat(),
+                        "consultation_type": "web_search_direct"
+                    }
+                    
+                    logger.info("✅ Web search provided direct response for historical/research query")
+                    
+                    return APIResponse(
+                        status="success",
+                        message="Medical guidance provided",
+                        data=result,
+                        timestamp=datetime.now().isoformat()
+                    )
+                else:
+                    logger.warning("Web search failed for historical query, falling back to RAG")
+            except Exception as web_error:
+                logger.warning(f"Web search failed: {web_error}, falling back to RAG")
+        
+        # For clinical questions, try RAG system first
+        logger.info("🔍 Clinical question - trying RAG system first...")
         
         # Ensure environment variables are loaded
         from dotenv import load_dotenv
@@ -286,7 +330,6 @@ async def medical_query(request: MedicalQuery):
                     break
         
         # Import and use RAG tool directly
-        sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'tools'))
         from rag_tool import query_rag
         
         try:
@@ -470,13 +513,22 @@ async def chat_endpoint(request: ChatMessage):
                 "problem", "issue", "symptoms", "feel", "sick", "nausea", "vomit", "vomiting", "fever", "temperature",
                 "trouble", "difficulty", "blood", "urine", "breathing",
                 "chest", "shortness", "dizzy", "tired", "fatigue", "help",
-                "what", "how", "why", "when", "should", "can", "is", "am"
+                "what", "how", "why", "when", "should", "can"
             ]
+            
+            # Use word boundary matching for common words to avoid false positives
+            import re
+            has_medical_keywords = any(keyword in message.lower() for keyword in medical_keywords)
+            
+            # Check for common question words with word boundaries to avoid false positives in names
+            question_words = ["is", "am", "are", "was", "were", "do", "does", "did", "will", "would", "could", "should"]
+            has_question_words = any(re.search(r'\b' + word + r'\b', message.lower()) for word in question_words)
             
             is_likely_name = (
                 len(words) >= 2 and len(words) <= 3 and
-                not any(keyword in message.lower() for keyword in medical_keywords) and
-                any(word[0].isupper() for word in words)  # At least one capitalized word
+                not has_medical_keywords and
+                not has_question_words and
+                all(word.isalpha() for word in words)  # All words are alphabetic (names)
             )
             
             # Initialize or reset conversation state
@@ -563,7 +615,13 @@ async def chat_endpoint(request: ChatMessage):
                                 "status": "success"
                             }
                         else:
-                            # Patient not found - stay in initial stage
+                            # Patient not found - reset conversation state to initial
+                            conversation_states[session_id] = {
+                                "stage": "initial",
+                                "patient_name": None,
+                                "patient_data": None
+                            }
+                            
                             system_logger.log_user_interaction(
                                 session_id=session_id,
                                 user_message=message,
@@ -653,7 +711,8 @@ async def chat_endpoint(request: ChatMessage):
                     "pain", "swelling", "worried", "concerned", "concern", "hurt", "ache",
                     "problem", "issue", "symptoms", "feel", "sick", "nausea", "vomit", "vomiting", "fever", "temperature",
                     "trouble", "difficulty", "blood", "urine", "breathing",
-                    "chest", "shortness", "dizzy", "tired", "fatigue",
+                    "chest", "shortness", "dizzy", "tired", "fatigue", "itching", "itch", "cramps", "cramping",
+                    "headache", "rash", "burning", "tingling", "numbness", "weakness", "swollen",
                     
                     # Medical condition keywords
                     "disease", "condition", "syndrome", "disorder", "infection",
@@ -706,12 +765,31 @@ async def chat_endpoint(request: ChatMessage):
                         is_patient_specific = any(indicator in message_lower for indicator in patient_specific_indicators)
                         is_general_question = any(indicator in message_lower for indicator in general_question_indicators)
                         
-                        if is_general_question and not is_patient_specific:
-                            # General medical question - don't use patient context
-                            clinical_result = clinical_agent.general_medical_query(message)
-                        else:
-                            # Patient-specific question - use patient context
-                            enhanced_query = f"""
+                        # Use direct RAG approach instead of Clinical Agent
+                        from dotenv import load_dotenv
+                        from rag_tool import query_rag
+                        
+                        # Load environment for RAG
+                        env_paths = [
+                            os.path.join(os.path.dirname(__file__), '..', '.env'),
+                            'backend/.env',
+                            '.env'
+                        ]
+                        
+                        for env_path in env_paths:
+                            if os.path.exists(env_path):
+                                load_dotenv(env_path, override=True)
+                                api_key = os.getenv('OPENAI_API_KEY')
+                                if api_key and len(api_key) > 20:
+                                    break
+                        
+                        try:
+                            if is_general_question and not is_patient_specific:
+                                # General medical question - don't use patient context
+                                rag_response = query_rag(message)
+                            else:
+                                # Patient-specific question - use patient context
+                                enhanced_query = f"""
 Patient Context:
 - Name: {state['patient_data']['patient_name']}
 - Diagnosis: {state['patient_data']['primary_diagnosis']}
@@ -722,7 +800,68 @@ Patient Question: {message}
 
 Please provide specific medical guidance considering this patient's discharge information.
 """
-                            clinical_result = clinical_agent.general_medical_query(enhanced_query)
+                                rag_response = query_rag(enhanced_query)
+                            
+                            if rag_response and len(rag_response.strip()) > 50:
+                                formatted_response = f"""📚 **REFERENCE MATERIALS** (Comprehensive Clinical Nephrology):
+{rag_response}
+
+📋 **SOURCE:** This information is from the Comprehensive Clinical Nephrology textbook, a peer-reviewed medical reference."""
+                                
+                                clinical_result = {
+                                    "status": "success",
+                                    "medical_guidance": formatted_response,
+                                    "sources": ["Reference Materials"],
+                                    "source_details": {
+                                        "reference_materials": "Comprehensive Clinical Nephrology (peer-reviewed textbook)"
+                                    },
+                                    "consultation_type": "reference_based"
+                                }
+                            else:
+                                raise Exception("RAG response too short or empty")
+                                
+                        except Exception as e:
+                            # Fallback to basic clinical guidance
+                            logger.warning(f"RAG failed: {e}, providing basic guidance")
+                            
+                            if "swelling" in message.lower() and "leg" in message.lower():
+                                basic_guidance = """🏥 **BASIC CLINICAL GUIDANCE**
+
+**Leg Swelling in Kidney Disease:**
+
+Leg swelling (edema) is common in kidney disease patients due to:
+
+1. **Fluid Retention**: Kidneys can't remove excess fluid effectively
+2. **Low Protein**: Kidney disease can cause protein loss, reducing blood volume
+3. **Medications**: Some blood pressure medications can cause swelling
+4. **Heart Function**: Kidney disease can affect heart function
+
+**Immediate Actions:**
+- Monitor daily weight (report gain >2-3 lbs/day)
+- Elevate legs when resting
+- Reduce sodium intake
+- Contact your nephrologist if swelling worsens
+- Watch for shortness of breath (seek immediate care)
+
+⚠️ **IMPORTANT**: Contact your healthcare provider for proper evaluation."""
+                            else:
+                                basic_guidance = f"""🏥 **BASIC CLINICAL GUIDANCE**
+
+For your concern about **{message}**, I recommend:
+
+1. **Contact your healthcare provider** for proper evaluation
+2. **Monitor your symptoms** and note any changes
+3. **Follow your current treatment plan** as prescribed
+4. **Seek immediate care** if symptoms worsen
+
+⚠️ **IMPORTANT**: This is basic guidance only. Always consult with qualified healthcare professionals."""
+
+                            clinical_result = {
+                                "status": "success",
+                                "medical_guidance": basic_guidance,
+                                "sources": ["Basic Clinical Knowledge"],
+                                "consultation_type": "basic_guidance"
+                            }
                         
                         if clinical_result.get("status") == "success":
                             # Combine routing message with clinical response

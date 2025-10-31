@@ -60,13 +60,19 @@ def load_rag_pipeline():
 Use the provided context to answer the question accurately and clearly.
 If unsure, say you are not certain.
 
+IMPORTANT: 
+- Do NOT include file paths, page numbers, or source citations in your response
+- Do NOT include signatures, "Best regards", or "Sincerely" at the end
+- Provide only the medical information and guidance
+- Keep the response professional but concise
+
 Context:
 {context}
 
 Question:
 {question}
 
-Answer (with concise clinical explanation):
+Medical Response:
 """
     prompt = ChatPromptTemplate.from_template(template)
 
