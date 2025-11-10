@@ -85,15 +85,18 @@ async def startup_event():
     
     logger.info("Initializing Medical AI Assistant API...")
     
+    # Try to initialize LangGraph workflow first
     try:
-        # Import and initialize LangGraph workflow
-        from langgraph_workflow import MedicalAIWorkflow
-        langgraph_workflow = MedicalAIWorkflow()
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'workflow'))
+        from stateful_workflow import get_stateful_workflow
         
-        logger.info("LangGraph workflow initialized successfully")
+        langgraph_workflow = get_stateful_workflow()
+        logger.info("✅ LangGraph stateful workflow initialized successfully")
         
-    except Exception as e:
-        logger.error(f"Failed to initialize LangGraph workflow: {e}")
+    except Exception as langgraph_error:
+        logger.warning(f"LangGraph workflow initialization failed: {langgraph_error}")
+        logger.info("Attempting fallback to individual agents...")
+        
         # Fallback to individual agents
         try:
             # Import agents with correct class names and paths
@@ -488,14 +491,18 @@ async def chat_endpoint(request: ChatMessage):
     
     try:
         if langgraph_workflow:
-            # Use LangGraph workflow for complete conversation handling
-            result = await langgraph_workflow.process_message(request.message)
+            # Use LangGraph stateful workflow for complete conversation handling
+            session_id = "streamlit_session"  # Single session for Streamlit demo
+            
+            result = langgraph_workflow.process_message(request.message, session_id)
+            
+            logger.info(f"✅ LangGraph workflow processed message successfully")
             
             return {
                 "response": result.get("response", "I'm sorry, I couldn't process that."),
                 "agent_used": result.get("agent_used", "Unknown"),
-                "sources": result.get("sources", []),
-                "status": "success"
+                "sources": [],
+                "status": result.get("status", "success")
             }
         else:
             # Implement proper conversation flow with session management

@@ -1,13 +1,15 @@
 # Medical AI Assistant
 
-A comprehensive post-discharge nephrology care assistant with multi-agent system architecture. This system provides personalized medical guidance using RAG (Retrieval-Augmented Generation) and web search capabilities.
+A comprehensive post-discharge nephrology care assistant with **LangGraph-powered multi-agent system architecture**. This system provides personalized medical guidance using RAG (Retrieval-Augmented Generation) and web search capabilities with stateful conversation management.
 
 ## 🏥 Features
 
-### Multi-Agent Architecture
+### LangGraph Multi-Agent Architecture ⭐ **NEW**
+- **Stateful Workflow**: LangGraph-based orchestration with conversation memory
 - **Receptionist Agent**: Handles patient identification and initial greetings
 - **Clinical Agent**: Provides medical guidance with source attribution
-- **Intelligent Routing**: Seamless handoff between agents based on conversation context
+- **Intelligent Routing**: Graph-based conditional routing between agents
+- **Conversation Persistence**: Maintains context across multiple interactions using checkpointing
 
 ### Advanced Capabilities
 - **Patient Context Management**: Personalized responses based on discharge reports
@@ -67,14 +69,20 @@ The application will be available at:
 ```
 medical_ai_assistant/
 ├── backend/
+│   ├── workflow/               # ⭐ LangGraph Workflows
+│   │   ├── stateful_workflow.py    # Stateful workflow with memory
+│   │   ├── medical_workflow.py     # Basic workflow
+│   │   ├── test_langgraph.py       # LangGraph tests
+│   │   └── README.md               # Workflow documentation
 │   ├── agents/
 │   │   ├── clinical.py          # Clinical AI Agent
 │   │   └── receptionist.py      # Receptionist Agent
 │   ├── api/
-│   │   └── main.py             # FastAPI backend
+│   │   └── main.py             # FastAPI backend with LangGraph
 │   ├── data/
 │   │   ├── comprehensive-clinical-nephrology.pdf
-│   │   └── vector_db/          # Vector database storage
+│   │   ├── patients.db         # SQLite patient database
+│   │   └── faiss_index/        # FAISS vector database
 │   ├── tools/
 │   │   ├── patient_db.py       # Patient database management
 │   │   ├── patient_lookup.py   # Enhanced patient retrieval
@@ -82,6 +90,12 @@ medical_ai_assistant/
 │   │   ├── web_search.py       # Medical literature search
 │   │   ├── logger.py           # Comprehensive logging system
 │   │   └── log_viewer.py       # System monitoring
+│   ├── logs/                   # Comprehensive logging
+│   │   ├── agent_handoffs.log
+│   │   ├── database_access.log
+│   │   ├── information_retrieval.log
+│   │   ├── interactions.log
+│   │   └── system_flow.log
 │   ├── scripts/
 │   │   ├── generate_patients.py # Sample patient data
 │   │   └── view_patients.py     # Database viewer
@@ -89,6 +103,7 @@ medical_ai_assistant/
 ├── frontend/
 │   └── app.py                  # Streamlit frontend
 ├── run_app.py                  # Application launcher
+├── ARCHITECTURE_REPORT.md      # Technical architecture
 └── README.md
 ```
 
