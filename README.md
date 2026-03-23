@@ -401,21 +401,16 @@ medical_ai_assistant/
 
 ##  Future Enhancements
 
-### **High Priority**
 1. **Hybrid Search** - Combine semantic + keyword search for better accuracy
 2. **Medication Interaction Checker** - Safety feature for drug interactions
 3. **Symptom Severity Triage** - Classify urgency (ER vs routine)
 4. **Real Web Search Integration** - Google/PubMed API integration
 5. **Evaluation Metrics** - Track RAG accuracy and user satisfaction
-
-### **Medium Priority**
 6. **Streaming Responses** - Real-time response generation
 7. **Caching Layer** - Redis for common queries
 8. **Multi-modal Support** - Upload lab reports, X-rays
 9. **Appointment Scheduling** - Book follow-up appointments
 10. **Better Patient Matching** - Fuzzy search with typo tolerance
-
-### **Nice to Have**
 11. **Multi-language Support** - Serve non-English patients
 12. **Voice Interface** - Speech-to-text and text-to-speech
 13. **Analytics Dashboard** - Usage metrics and insights
