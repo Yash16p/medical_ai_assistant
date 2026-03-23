@@ -7,7 +7,8 @@ from typing import TypedDict, Annotated, Sequence, Dict
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
+from datetime import datetime
 import operator
 import os
 import sys
@@ -43,10 +44,10 @@ class StatefulMedicalWorkflow:
         """Initialize stateful workflow"""
         logger.info("Initializing Stateful LangGraph Workflow...")
         
-        self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
             temperature=0.7,
-            api_key=os.getenv("OPENAI_API_KEY")
+            google_api_key=os.getenv("GEMINI_API_KEY")
         )
         
         self.web_search = WebSearchTool()
@@ -99,15 +100,18 @@ class StatefulMedicalWorkflow:
         last_message = messages[-1].content if messages else ""
         patient_data = state.get("patient_data", {})
         
+        logger.info(f"Router: patient_data exists={bool(patient_data)}, last_message='{last_message[:50]}'")
+        
         # Log routing decision
         system_logger.log_system_flow(
-            event_type="router_decision",
-            description=f"Routing message: {last_message[:50]}...",
-            session_id=state.get("session_id", "default")
+            "router_decision",
+            f"Routing message: {last_message[:50]}...",
+            state.get("session_id", "default")
         )
         
         # Determine routing
         if not patient_data:
+            logger.info("Router: No patient data, setting stage to needs_identification")
             state["conversation_stage"] = "needs_identification"
         else:
             # Check if medical query
@@ -121,6 +125,7 @@ class StatefulMedicalWorkflow:
             is_medical = any(keyword in last_message.lower() for keyword in medical_keywords)
             
             if is_medical:
+                logger.info("Router: Medical query detected")
                 state["conversation_stage"] = "medical_query"
                 state["medical_query"] = last_message
                 state["current_agent"] = "clinical"
@@ -134,6 +139,7 @@ class StatefulMedicalWorkflow:
                     session_id=state.get("session_id", "default")
                 )
             else:
+                logger.info("Router: General followup")
                 state["conversation_stage"] = "general_followup"
         
         return state
@@ -208,67 +214,66 @@ class StatefulMedicalWorkflow:
     def medical_consultation_node(self, state: ConversationState) -> ConversationState:
         """Handle medical consultation with RAG or web search"""
         logger.info("Medical consultation node processing...")
-        
+
         medical_query = state.get("medical_query", "")
         patient_data = state.get("patient_data", {})
         session_id = state.get("session_id", "default")
-        
-        # Determine query type
-        temporal_keywords = ["latest", "recent", "new", "current", "2024", "2025"]
-        needs_web_search = any(keyword in medical_query.lower() for keyword in temporal_keywords)
-        
+
+        # Determine if query needs web search using the web search tool's logic
+        needs_web_search = self.web_search.is_query_suitable_for_web_search(medical_query)
+
         try:
             if needs_web_search:
                 # Use web search
                 logger.info("Using web search for query")
                 search_results = self.web_search.search_medical_literature(medical_query)
-                
-                response = f"""This sounds like a medical concern. Let me connect you with our Clinical AI Agent.
 
-🌐 **RECENT MEDICAL LITERATURE** (Web Search):
-{search_results}
+                # Format the search results properly
+                formatted_results = self.web_search.format_web_search_response(search_results, medical_query)
 
-⚠️ **IMPORTANT:** This is an AI assistant for educational purposes only. Always consult healthcare professionals for medical advice."""
-                
+                response = f"""🌐 **WEB SEARCH RESULTS:**
+
+    {formatted_results}"""
+
                 sources = ["Web Search"]
-                consultation_type = "web_fallback"
-            
+                consultation_type = "web_search"
+
             else:
                 # Use RAG
                 logger.info("Using RAG for query")
-                
+
                 # Build enhanced query with patient context
                 if patient_data:
                     enhanced_query = f"""
-Patient Context:
-- Name: {patient_data.get('name')}
-- Diagnosis: {patient_data.get('diagnosis')}
-- Medications: {patient_data.get('medications')}
-- Discharge Date: {patient_data.get('date_admitted')}
+    Patient Context:
+    - Name: {patient_data.get('name')}
+    - Diagnosis: {patient_data.get('diagnosis')}
+    - Medications: {patient_data.get('medications')}
+    - Discharge Date: {patient_data.get('date_admitted')}
 
-Patient Question: {medical_query}
+    Patient Question: {medical_query}
 
-Please provide specific medical guidance considering this patient's discharge information.
-"""
+    Please provide specific medical guidance considering this patient's discharge information.
+    """
                 else:
                     enhanced_query = medical_query
-                
+
                 rag_response = query_rag(enhanced_query)
-                
+
                 response = f"""This sounds like a medical concern. Let me connect you with our Clinical AI Agent.
 
-📚 **REFERENCE MATERIALS** (Comprehensive Clinical Nephrology):
-{rag_response}
+    📚 **REFERENCE MATERIALS** (Comprehensive Clinical Nephrology):
+    {rag_response}
 
-📋 **SOURCE:** This information is from the Comprehensive Clinical Nephrology textbook, a peer-reviewed medical reference.
+     **SOURCE:** This information is from the Comprehensive Clinical Nephrology textbook, a peer-reviewed medical reference.
 
-⚠️ **IMPORTANT:** This is an AI assistant for educational purposes only. Always consult healthcare professionals for medical advice."""
-                
+     **IMPORTANT:** This is an AI assistant for educational purposes only. Always consult healthcare professionals for medical advice."""
+
                 sources = ["Reference Materials"]
                 consultation_type = "reference_based"
-            
+
             state["messages"].append(AIMessage(content=response))
-            
+
             # Log interaction
             system_logger.log_user_interaction(
                 session_id=session_id,
@@ -283,24 +288,25 @@ Please provide specific medical guidance considering this patient's discharge in
                     "agent_handoff": True
                 }
             )
-            
+
             # Add to query history
             query_history = state.get("query_history", [])
             query_history.append({
                 "query": medical_query,
                 "type": "web_search" if needs_web_search else "rag",
-                "timestamp": system_logger._get_timestamp()
+                "timestamp": datetime.now().isoformat()
             })
             state["query_history"] = query_history
-            
+
             logger.info("Medical consultation completed successfully")
-        
+
         except Exception as e:
             logger.error(f"Medical consultation failed: {e}")
             response = "I apologize, but I encountered an error processing your medical query. Please consult with your healthcare provider."
             state["messages"].append(AIMessage(content=response))
-        
+
         return state
+
     
     def general_response_node(self, state: ConversationState) -> ConversationState:
         """Handle general follow-up responses"""
@@ -337,13 +343,19 @@ Please provide specific medical guidance considering this patient's discharge in
         """Determine routing based on conversation stage"""
         stage = state.get("conversation_stage", "")
         
+        logger.info(f"Route decision: stage='{stage}'")
+        
         if stage == "needs_identification":
+            logger.info("Routing to: identify_patient")
             return "identify_patient"
         elif stage == "medical_query":
+            logger.info("Routing to: medical_query")
             return "medical_query"
         elif stage == "general_followup":
+            logger.info("Routing to: general")
             return "general"
         else:
+            logger.info(f"Routing to: end (unknown stage: {stage})")
             return "end"
     
     def process_message(self, message: str, session_id: str = "default") -> dict:

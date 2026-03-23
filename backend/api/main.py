@@ -327,7 +327,7 @@ async def medical_query(request: MedicalQuery):
             if os.path.exists(env_path):
                 logger.info(f"Loading environment from: {env_path}")
                 load_dotenv(env_path, override=True)
-                api_key = os.getenv('OPENAI_API_KEY')
+                api_key = os.getenv('GEMINI_API_KEY')
                 if api_key and len(api_key) > 20:
                     logger.info("✅ API key loaded successfully")
                     break
@@ -786,7 +786,7 @@ async def chat_endpoint(request: ChatMessage):
                         for env_path in env_paths:
                             if os.path.exists(env_path):
                                 load_dotenv(env_path, override=True)
-                                api_key = os.getenv('OPENAI_API_KEY')
+                                api_key = os.getenv('GEMINI_API_KEY')
                                 if api_key and len(api_key) > 20:
                                     break
                         

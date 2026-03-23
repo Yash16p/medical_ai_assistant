@@ -243,13 +243,13 @@ def main():
     print()
     
     # Check environment
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        print("❌ OPENAI_API_KEY not found in environment")
-        print("Please set your OpenAI API key in backend/.env")
+        print("❌ GEMINI_API_KEY not found in environment")
+        print("Please set your Gemini API key in backend/.env")
         return
     else:
-        print(f"✅ OpenAI API key found (length: {len(api_key)})")
+        print(f"✅ Gemini API key found (length: {len(api_key)})")
         print()
     
     # Run tests

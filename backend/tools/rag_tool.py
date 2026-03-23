@@ -1,7 +1,8 @@
 import os
 from dotenv import load_dotenv, find_dotenv
-from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
@@ -12,21 +13,21 @@ if not env_path:
     env_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
 load_dotenv(env_path, override=True)
 
-def _get_openai_key():
-    """Return OPENAI_API_KEY from env or .env file, and set it in os.environ."""
-    key = os.getenv('OPENAI_API_KEY')
+def _get_gemini_key():
+    """Return GEMINI_API_KEY from env or .env file, and set it in os.environ."""
+    key = os.getenv('GEMINI_API_KEY')
     if key:
         return key
     try:
         if os.path.exists(env_path):
             with open(env_path, 'r', encoding='utf-8') as f:
                 for line in f:
-                    if line.strip().startswith('OPENAI_API_KEY'):
+                    if line.strip().startswith('GEMINI_API_KEY'):
                         parts = line.strip().split('=', 1)
                         if len(parts) == 2:
                             val = parts[1].strip().strip('"').strip("'")
                             if val:
-                                os.environ['OPENAI_API_KEY'] = val
+                                os.environ['GEMINI_API_KEY'] = val
                                 return val
     except Exception:
         pass
@@ -37,22 +38,32 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 # Load API key
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INDEX_DIR = os.path.join(BASE_DIR, "data", "faiss_index")
+CHROMA_DIR = os.path.join(BASE_DIR, "data", "chroma_db")
 
 def load_rag_pipeline():
-    """Load FAISS index and build RAG pipeline."""
-    print("📦 Loading FAISS index...")
-    # Explicitly pass API key to avoid environment loading issues
-    _api_key = _get_openai_key()
-    embeddings = OpenAIEmbeddings(openai_api_key=_api_key)
-    vectorstore = FAISS.load_local(INDEX_DIR, embeddings, allow_dangerous_deserialization=True)
+    """Load ChromaDB index and build RAG pipeline."""
+    print("📦 Loading ChromaDB index...")
+    
+    # Use LOCAL embeddings (no API key needed!)
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'normalize_embeddings': True}
+    )
+    
+    vectorstore = Chroma(
+        persist_directory=CHROMA_DIR,
+        embedding_function=embeddings,
+        collection_name="medical_knowledge"
+    )
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 
-    # Define model
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
+    # Define Gemini model for generation (still uses API)
+    _api_key = _get_gemini_key()
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
         temperature=0.2,
-        openai_api_key=_api_key
+        google_api_key=_api_key
     )
 
     # Custom prompt template
@@ -94,8 +105,8 @@ def query_rag(question: str):
     """Query the RAG system."""
     qa_chain = load_rag_pipeline()
     print(f"🔍 Querying RAG for: {question}")
-    response = qa_chain.invoke(question)  # LCEL expects query string directly
-    return response  # LCEL returns string directly
+    response = qa_chain.invoke(question)
+    return response
 
 if __name__ == "__main__":
     try:

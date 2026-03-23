@@ -7,7 +7,7 @@ from typing import TypedDict, Annotated, Sequence
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 import operator
 import os
 import sys
@@ -46,10 +46,10 @@ class MedicalWorkflow:
         logger.info("Initializing LangGraph Medical Workflow...")
         
         # Initialize LLM
-        self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
             temperature=0.7,
-            api_key=os.getenv("OPENAI_API_KEY")
+            google_api_key=os.getenv("GEMINI_API_KEY")
         )
         
         # Initialize tools
@@ -281,19 +281,19 @@ Please provide specific medical guidance considering this patient's discharge in
         
         if conversation_stage == "rag_retrieved":
             rag_response = state.get("rag_response", "")
-            formatted_response = f"""📚 **REFERENCE MATERIALS** (Comprehensive Clinical Nephrology):
+            formatted_response = f"""ðŸ“š **REFERENCE MATERIALS** (Comprehensive Clinical Nephrology):
 {rag_response}
 
-📋 **SOURCE:** This information is from the Comprehensive Clinical Nephrology textbook, a peer-reviewed medical reference.
+ðŸ“‹ **SOURCE:** This information is from the Comprehensive Clinical Nephrology textbook, a peer-reviewed medical reference.
 
-⚠️ **IMPORTANT:** This is an AI assistant for educational purposes only. Always consult healthcare professionals for medical advice."""
+âš ï¸ **IMPORTANT:** This is an AI assistant for educational purposes only. Always consult healthcare professionals for medical advice."""
             
         elif conversation_stage == "web_search_completed":
             web_response = state.get("web_search_response", "")
-            formatted_response = f"""🌐 **RECENT MEDICAL LITERATURE** (Web Search):
+            formatted_response = f"""ðŸŒ **RECENT MEDICAL LITERATURE** (Web Search):
 {web_response}
 
-⚠️ **IMPORTANT:** This is an AI assistant for educational purposes only. Always consult healthcare professionals for medical advice."""
+âš ï¸ **IMPORTANT:** This is an AI assistant for educational purposes only. Always consult healthcare professionals for medical advice."""
         
         else:
             # Fallback response

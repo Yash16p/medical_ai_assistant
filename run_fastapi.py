@@ -5,12 +5,12 @@ import sys
 # Set environment variables
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
-print("🚀 Starting Medical AI Assistant FastAPI Backend...")
-print("🔗 API will be available at: http://localhost:8000")
-print("📚 API Documentation: http://localhost:8000/docs")
-print("🔍 Interactive API: http://localhost:8000/redoc")
-print("\n⚠️  Note: The first request may take a moment to initialize the LangGraph workflow")
-print("💡 Use Ctrl+C to stop the server")
+print("Starting Medical AI Assistant FastAPI Backend...")
+print("API will be available at: http://localhost:8000")
+print("API Documentation: http://localhost:8000/docs")
+print("Interactive API: http://localhost:8000/redoc")
+print("\nNote: The first request may take a moment to initialize the LangGraph workflow")
+print("Use Ctrl+C to stop the server")
 print("\n" + "="*60)
 
 try:
@@ -23,7 +23,7 @@ try:
         "--reload"
     ])
 except KeyboardInterrupt:
-    print("\n\n🛑 FastAPI server stopped")
+    print("\nFastAPI server stopped")
 except Exception as e:
-    print(f"\n❌ Error starting FastAPI server: {e}")
-    print("\n💡 Try running manually with: uvicorn backend.api.main:app --reload")
+    print(f"\nError starting FastAPI server: {e}")
+    print("\nTry running manually with: uvicorn backend.api.main:app --reload")

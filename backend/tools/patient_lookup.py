@@ -404,3 +404,21 @@ class PatientLookupTool(PatientDataRetrievalTool):
             return {"status": "success", "data": result["data"]}
         else:
             return {"status": "error", "message": result["message"]}
+
+
+# Module-level convenience functions used by workflow files
+_tool = None
+
+def _get_tool() -> PatientDataRetrievalTool:
+    global _tool
+    if _tool is None:
+        _tool = PatientDataRetrievalTool()
+    return _tool
+
+def lookup_patient(name_or_message: str) -> dict:
+    """Look up a patient by name or message string."""
+    return _get_tool().lookup_patient_by_name(name_or_message)
+
+def get_discharge_report(patient_name: str) -> dict:
+    """Get discharge report for a patient by name."""
+    return _get_tool().get_discharge_report(patient_name)
